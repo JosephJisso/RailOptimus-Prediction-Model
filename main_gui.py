@@ -36,6 +36,21 @@ def parse_cities(city_field: str, num_trains: int):
         city_tokens += [city_tokens[-1]] * (num_trains - len(city_tokens))
     return city_tokens[:num_trains]
 
+def parse_speeds(speed_field: str, num_trains: int):
+    speed_field = speed_field.strip()
+    if not speed_field:
+        return [80.0] * num_trains
+
+    tokens = []
+    for s in speed_field.split(","):
+        try:
+            tokens.append(float(s.strip()))
+        except:
+            tokens.append(80.0)
+    if len(tokens) < num_trains:
+        tokens += [tokens[-1]] * (num_trains - len(tokens))
+    return tokens[:num_trains]
+
 # ------------------------
 # Predict button
 # ------------------------
@@ -43,15 +58,6 @@ def on_predict():
     trains_raw = entry_train.get()
     station_raw = entry_station.get()
     station_name = entry_name.get()
-    speed_raw = entry_speed.get().strip()
-
-    try:
-        speed = float(speed_raw)
-        if speed < 0:
-            raise ValueError
-    except Exception:
-        messagebox.showwarning("Input Error", "Enter a valid numeric speed (km/h).")
-        return
 
     pairs = parse_inputs(trains_raw, station_raw)
     if not pairs:
@@ -59,12 +65,20 @@ def on_predict():
         return
 
     cities = parse_cities(entry_city.get(), len(pairs))
+    speeds = parse_speeds(entry_speed.get(), len(pairs))
 
     # Clear output
     txt_output.delete(1.0, tk.END)
 
     for i, (train_no, station_code) in enumerate(pairs):
         city = cities[i]
+        speed = speeds[i]
+
+        # Validate speed
+        if speed < 0:
+            txt_output.insert(tk.END, f"⚠️ Invalid speed for {train_no}, using default 80 km/h\n")
+            speed = 80.0
+
         weather_desc, visibility_km, ok = get_weather(city)
         header = f"Train: {train_no}    City: {city}    Weather: {weather_desc}    Visibility: {visibility_km:.2f} km"
         if not ok:
@@ -79,7 +93,7 @@ def on_predict():
 
             row = get_train_station_row(train_no, station_code) if station_code else None
 
-            action = agent.get_action(predicted_delay, visibility_km, speed, weather_desc=weather_desc)
+            action = agent.get_action(predicted_delay, visibility_km, speed, weather_desc)
 
             txt_output.insert(tk.END, f"  Predicted Delay: {predicted_delay:.2f} mins\n")
             if row:
@@ -120,15 +134,15 @@ entry_city = tk.Entry(root, width=50)
 entry_city.grid(row=3, column=1, padx=5, pady=4)
 entry_city.insert(0, "Delhi,Mumbai")
 
-tk.Label(root, text="Current Speed (km/h):").grid(row=4, column=0, sticky="e", padx=5, pady=4)
-entry_speed = tk.Entry(root, width=12)
+tk.Label(root, text="Speed(s) [km/h, comma separated, optional]:").grid(row=4, column=0, sticky="e", padx=5, pady=4)
+entry_speed = tk.Entry(root, width=25)
 entry_speed.grid(row=4, column=1, sticky="w", padx=5, pady=4)
-entry_speed.insert(0, "80")
+entry_speed.insert(0, "80,60")
 
 btn_predict = tk.Button(root, text="Predict & Decide", command=on_predict)
 btn_predict.grid(row=5, column=0, columnspan=2, pady=8)
 
-txt_output = scrolledtext.ScrolledText(root, width=85, height=20)
+txt_output = scrolledtext.ScrolledText(root, width=85, height=22)
 txt_output.grid(row=6, column=0, columnspan=2, padx=8, pady=8)
 
 root.mainloop()
